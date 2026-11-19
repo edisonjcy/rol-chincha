@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rol de Turnos – C.S. Chincha Baja</title>
+<style>
+:root{--bg:#f3f7f6;--cd:#fff;--tx:#14201c;--mu:#5b6b65;--pr:#0f766e;--bd:#d3dedb;--ok:#15803d;--wa:#b45309;--er:#b91c1c;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1614;--cd:#18231f;--tx:#e8f0ed;--mu:#9bb0a8;--pr:#2dd4bf;--bd:#2c3b36;--ok:#4ade80;--wa:#fbbf24;--er:#f87171;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:18px/1.4 system-ui,Segoe UI,Arial,sans-serif}
+header{background:var(--pr);color:#fff;padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+header h1{font-size:19px;margin:0}header small{opacity:.9;display:block;font-size:14px}
+main{max-width:1200px;margin:0 auto;padding:14px}.card{background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:21px}button,select,input{font:inherit;border-radius:10px;border:2px solid var(--bd);padding:10px 14px;background:var(--cd);color:var(--tx)}
+button{cursor:pointer;font-weight:600}.pr{background:var(--pr);color:#fff;border-color:var(--pr)}.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.er{color:var(--er)}
+button:disabled{opacity:.45;cursor:not-allowed}nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}nav button{flex:1;min-width:120px}nav .on{background:var(--pr);color:#fff;border-color:var(--pr)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}label{display:block;font-weight:600;margin:10px 0 4px}.muted{color:var(--mu);font-size:15px}
+.big{width:100%;font-size:24px;letter-spacing:3px;text-align:center}.bar{height:16px;background:var(--bd);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.cal b{text-align:center;font-size:14px;color:var(--mu)}
+.day{min-height:64px;border-radius:10px;border:2px solid var(--bd);padding:4px;text-align:center;font-weight:400}.day span{display:block;font-size:13px;color:var(--mu)}
+.day em{display:inline-block;margin-top:2px;padding:1px 6px;border-radius:6px;color:#fff;font-style:normal;font-weight:700;font-size:15px}.day.x{background:var(--bg);opacity:.55;cursor:default}
+.sc{overflow-x:auto;border:1px solid var(--bd);border-radius:10px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{border:1px solid var(--bd);padding:2px;text-align:center;min-width:28px}
+td.n,th.n{text-align:left;position:sticky;left:0;background:var(--cd);min-width:170px;padding:4px 6px}td.c{cursor:pointer;font-weight:700;color:#fff}td.c.e{color:var(--mu)}td.g,th.s{background:var(--bg)}
+.t-ok{color:var(--ok)}.t-wa{color:var(--wa)}.t-er{color:var(--er)}
+.mod{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:14px;z-index:20}.mod>div{background:var(--cd);border-radius:16px;padding:18px;max-width:460px;width:100%;max-height:90%;overflow:auto}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}.opts button{color:#fff;border:0;padding:16px 8px}.opts small{display:block;font-weight:400}.badge{padding:3px 10px;border-radius:20px;font-size:14px;color:#fff}
+@media print{header,nav,.noprint,.mod{display:none!important}body{background:#fff;color:#000}.card{border:0}.ph{display:block!important}@page{size:landscape;margin:8mm}}.ph{display:none}
+</style></head><body>
+<header><div><h1>Rol de Turnos · Centro de Salud Chincha Baja</h1><small id="sub"></small></div><div id="hr"></div></header>
+<main id="app"><div class="card">Cargando…</div></main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MN=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'],DL=['D','L','M','M','J','V','S'],fx=x=>Number(Number(x).toFixed(2));
+function defMes(){const n=new Date();if(n.getDate()>=20)n.setMonth(n.getMonth()+1);return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')}
+let S={cfg:{meta:150,servicios:[],turnos:{}},staff:{},rol:{},est:{},pub:false,me:null,view:'mi',mes:defMes(),sv:null,edit:null,lg:{s:'dni'},ready:false};
+const tk=()=>{try{return localStorage.getItem('tk')||''}catch(e){return''}};
+async function api(a,d={}){const r=await fetch('/api',{method:'POST',headers:{'content-type':'application/json','x-token':tk()},body:JSON.stringify({action:a,mes:S.mes,...d})});const j=await r.json();if(j.error){if(j.auth){try{localStorage.removeItem('tk')}catch(e){}S.me=null}throw new Error(j.error)}return j}
+async function act(a,d){try{const j=await api(a,d);await load();return j}catch(e){alert(e.message);render()}}
+async function load(){try{const j=await api('state');Object.assign(S,j)}catch(e){S.me=null}S.ready=true;render()}
+const ym=()=>S.mes.split('-').map(Number),nd=()=>{const[y,m]=ym();return new Date(y,m,0).getDate()},dw=d=>{const[y,m]=ym();return new Date(y,m-1,d).getDay()};
+const T=c=>S.cfg.turnos[c],H=c=>T(c)?.h||0,svn=id=>(S.cfg.servicios.find(s=>s.id===id)||{n:id||''}).n;
+const days=dni=>S.rol[dni]?.d||{},tot=dni=>fx(Object.values(days(dni)).reduce((a,c)=>a+H(c),0));
+const cg=()=>S.me?.cargo,full=()=>cg()==='admin'||cg()==='jefa',adm=()=>cg()==='admin',jefe=()=>cg()==='jefe';
+const act_staff=sv=>Object.values(S.staff).filter(p=>p.servicio===sv&&p.activo!==false).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+function blocked(d,p){const w=dw(d);return(S.cfg.domingo&&w===0)||(p.tipo==='adm'&&w===6)}
+function canEdit(p){if(full())return true;if(S.pub)return false;return p.dni===S.me.dni||(jefe()&&p.servicio===S.me.servicio)}
+const codesFor=(p,d)=>{const w=dw(d);return p.tipo==='adm'?(w>=1&&w<=5?['ADM','L','V']:['L','V']):['M','T','MT','GD','L','V']};
+const tc=t=>{const x=tot(t),m=S.cfg.meta;return x===m?'t-ok':x<m?'t-wa':'t-er'},tmsg=t=>{const x=tot(t),m=S.cfg.meta;return x===m?'✔ Completo':x<m?'Faltan '+fx(m-x)+' h':'Sobran '+fx(x-m)+' h'};
+const sest=sv=>S.est[sv]?.estado||'borrador';
+function grid(list,sv){const n=nd();let h='<div class="sc"><table><tr><th class="n">Apellidos y nombres</th>';
+ for(let d=1;d<=n;d++)h+=`<th class="${dw(d)===0?'s':''}">${d}<br>${DL[dw(d)]}</th>`;h+='<th>Total</th></tr>';
+ list.forEach(p=>{h+=`<tr><td class="n">${p.cargo==='jefe'?'⭐ ':''}${esc(p.nombre)}${S.rol[p.dni]?.listo?' ✔':''}</td>`;
+  for(let d=1;d<=n;d++){const c=days(p.dni)[d];h+=blocked(d,p)&&!c?'<td class="g"></td>':`<td class="c ${c?'':'e'}" style="background:${c?T(c)?.c:'transparent'}" data-a="cell" data-dni="${p.dni}" data-d="${d}">${c||'·'}</td>`}
+  h+=`<td class="${tc(p.dni)}"><b>${tot(p.dni)}</b></td></tr>`});
+ if(sv){h+='<tr><td class="n"><b>Cobertura</b></td>';for(let d=1;d<=n;d++){if(S.cfg.domingo&&dw(d)===0){h+='<td class="g"></td>';continue}
+  const cs=list.map(p=>days(p.dni)[d]),m=cs.some(c=>['M','MT','GD','ADM'].includes(c)),t=cs.some(c=>['T','MT','GD'].includes(c));
+  h+=m&&t?'<td class="t-ok">✔</td>':`<td class="t-er" title="Falta ${m?'tarde':t?'mañana':'mañana y tarde'}">⚠</td>`}h+='<td></td></tr>'}
+ return h+'</table></div>'}
+function mine(){const p=S.me,n=nd(),off=(dw(1)+6)%7;let h='<div class="cal">'+['L','M','M','J','V','S','D'].map(x=>`<b>${x}</b>`).join('')+'<span></span>'.repeat(off);
+ for(let d=1;d<=n;d++){const c=days(p.dni)[d],x=blocked(d,p)&&!c;h+=`<button class="day ${x?'x':''}" ${x||!canEdit(p)?'disabled':''} data-a="cell" data-dni="${p.dni}" data-d="${d}"><span>${d}</span>${c?`<em style="background:${T(c)?.c}">${c}</em>`:''}</button>`}return h+'</div>'}
+const legend=()=>'<div class="row muted">'+Object.entries(S.cfg.turnos).map(([k,v])=>`<span><em class="badge" style="background:${v.c}">${k}</em> ${esc(v.n)} (${v.h}h)</span>`).join(' ')+'</div>';
+function vMi(){const p=S.me,x=tot(p.dni),m=S.cfg.meta,ls=S.rol[p.dni]?.listo;
+ return`<div class="card"><h2>Mi rol de ${MN[ym()[1]-1]} ${ym()[0]}</h2><p class="muted">Toque un día para elegir su turno. Los domingos no se trabaja.</p>
+ <div class="row"><b class="${tc(p.dni)}">${x} de ${m} horas · ${tmsg(p.dni)}</b></div><div class="bar"><i style="width:${Math.min(100,x/m*100)}%"></i></div><br>${mine()}${legend()}
+ <div class="row"><button class="ok" data-a="listo" ${(x!==m&&!ls)||(S.pub&&!full())?'disabled':''}>${ls?'✔ Rol enviado (tocar para corregir)':'Ya terminé mi rol'}</button>${x!==m?`<span class="muted">Debe completar exactamente ${m} horas.</span>`:''}</div></div>`}
+function vSrv(){const sv=full()?(S.sv||S.cfg.servicios[0]?.id):S.me.servicio,l=act_staff(sv),e=sest(sv),bad=l.filter(p=>tot(p.dni)!==S.cfg.meta).length;
+ return`<div class="card"><h2>Rol del servicio ${full()?`<select data-c="sv">${S.cfg.servicios.map(s=>`<option value="${s.id}" ${s.id===sv?'selected':''}>${esc(s.n)}</option>`).join('')}</select>`:esc(svn(sv))}</h2>
+ <p class="muted">Toque cualquier casilla para cambiar el turno. ⚠ = día sin cobertura. ✔ junto al nombre = terminó su rol.</p>${l.length?grid(l,sv):'<p>No hay personal registrado en este servicio.</p>'}${legend()}
+ <div class="row"><span class="badge" style="background:${e==='listo'?'var(--ok)':'var(--wa)'}">${e==='listo'?'Enviado a Jefatura de Personal':'En preparación'}</span>
+ <button class="pr" data-a="est" data-sv="${sv}" data-e="${e==='listo'?'borrador':'listo'}" ${S.pub&&!full()?'disabled':''}>${e==='listo'?'Volver a edición':'Todo OK → enviar a Jefa de Personal'}</button>${bad?`<span class="t-er">${bad} persona(s) sin las ${S.cfg.meta} horas</span>`:''}</div></div>`}
+function vApr(){const sv=S.cfg.servicios.filter(s=>act_staff(s.id).length),all=sv.every(s=>sest(s.id)==='listo');
+ return`<div class="card"><h2>Aprobación de Jefa de Personal</h2>${S.pub?'<p class="t-ok"><b>✔ Rol publicado: todos los trabajadores ya pueden verlo.</b></p>':''}
+ <div class="sc"><table>${sv.map(s=>{const l=act_staff(s.id),ok=l.filter(p=>tot(p.dni)===S.cfg.meta).length,e=sest(s.id);return`<tr><td class="n">${esc(s.n)}</td><td>${l.length} personas</td><td class="${ok===l.length?'t-ok':'t-wa'}">${ok}/${l.length} con ${S.cfg.meta} h</td><td>${e==='listo'?'<b class="t-ok">Enviado</b>':'<b class="t-wa">En preparación</b>'}</td><td><button data-a="ver" data-sv="${s.id}">Revisar</button></td></tr>`}).join('')}</table></div>
+ <div class="row">${S.pub?'<button class="er" data-a="pub" data-v="0">Retirar publicación (reabrir)</button>':`<button class="ok" data-a="pub" data-v="1" ${all?'':'disabled'}>Aprobar y enviar el rol de todos</button>${all?'':'<span class="muted">Faltan servicios por enviar.</span>'}`}</div></div>`}
+function vPub(){if(!S.pub)return'<div class="card"><h2>Rol aprobado</h2><p>Aún no se publica el rol de este mes. Cuando la Jefa de Personal lo apruebe, aparecerá aquí.</p></div>';
+ return`<div class="card"><div class="row noprint"><h2 style="margin:0;flex:1">Rol aprobado · ${MN[ym()[1]-1]} ${ym()[0]}</h2><button class="pr" data-a="csv">Descargar Excel</button><button data-a="print">Imprimir / PDF</button></div>
+ <h2 class="ph">HORARIO DE TRABAJO DEL CENTRO DE SALUD DE CHINCHA BAJA — ${MN[ym()[1]-1].toUpperCase()} ${ym()[0]}</h2>
+ ${S.cfg.servicios.map(s=>{const l=act_staff(s.id);return l.length?`<h3>${esc(s.n)}</h3>${grid(l)}`:''}).join('')}${legend()}</div>`}
+function vCfg(){const c=S.cfg;return`<div class="card"><h2>Configuración</h2><label>Horas obligatorias al mes</label><input type="number" data-c="meta" value="${c.meta}" style="width:120px">
+ <label><input type="checkbox" data-c="dom" ${c.domingo?'checked':''}> Los domingos no se trabaja</label></div>
+ <div class="card"><h2>Turnos (nombre y horas)</h2>${Object.entries(c.turnos).map(([k,v])=>`<div class="row"><em class="badge" style="background:${v.c};min-width:44px;text-align:center">${k}</em><input data-c="tn" data-k="${k}" value="${esc(v.n)}" style="flex:1;min-width:180px"><input type="number" step="0.25" data-c="th" data-k="${k}" value="${v.h}" style="width:100px"> h</div>`).join('')}</div>
+ <div class="card"><h2>Servicios</h2>${c.servicios.map((s,i)=>`<div class="row"><input data-c="sn" data-i="${i}" value="${esc(s.n)}" style="flex:1"><button class="er" data-a="delsv" data-i="${i}">Quitar</button></div>`).join('')}<div class="row"><input id="nsv" placeholder="Nuevo servicio"><button class="pr" data-a="addsv">Agregar</button></div></div>`}
+function vPer(){const c=S.cfg;return`<div class="card"><h2>➕ Agregar jefe o persona</h2><p class="muted">Cree aquí a los jefes de servicio y a la Jefa de Personal sin que tengan que registrarse antes.</p>
+ <div class="row"><input id="an" placeholder="Apellidos y nombres" style="flex:2;min-width:200px"><input id="ad" inputmode="numeric" maxlength="8" placeholder="DNI" style="width:140px"></div>
+ <div class="row"><select id="as">${c.servicios.map(s=>`<option value="${s.id}">${esc(s.n)}</option>`).join('')}</select><select id="at"><option value="turnos">Turnos</option><option value="adm">Administrativo</option></select>
+ <select id="ac"><option value="jefe">Jefe de servicio</option><option value="jefa">Jefa de Personal</option><option value="trab">Trabajador</option></select><input id="ap" type="password" inputmode="numeric" maxlength="8" placeholder="Clave (4-8 números)" style="width:190px"></div>
+ <button class="pr" data-a="addp">Agregar</button></div>
+ <div class="card"><h2>Personal y permisos</h2><p class="muted">Para nombrar un Jefe de servicio o Jefa de Personal: primero asigne su clave (4 a 8 números), luego elija el cargo. Ellos ingresan con DNI y esa clave.</p>
+ <div class="sc"><table><tr><th class="n">Nombre</th><th>DNI</th><th>Servicio</th><th>Horario</th><th>Cargo</th><th>Clave</th><th></th></tr>${Object.values(S.staff).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`<tr><td class="n">${esc(p.nombre)}</td><td>${p.dni}</td>
+ <td><select data-c="ps" data-dni="${p.dni}">${c.servicios.map(s=>`<option value="${s.id}" ${s.id===p.servicio?'selected':''}>${esc(s.n)}</option>`).join('')}</select></td>
+ <td><select data-c="pt" data-dni="${p.dni}"><option value="turnos" ${p.tipo!=='adm'?'selected':''}>Turnos</option><option value="adm" ${p.tipo==='adm'?'selected':''}>Administrativo</option></select></td>
+ <td><select data-c="pc" data-dni="${p.dni}">${[['trab','Trabajador'],['jefe','Jefe de servicio'],['jefa','Jefa de Personal']].map(([k,v])=>`<option value="${k}" ${p.cargo===k?'selected':''}>${v}</option>`).join('')}</select></td>
+ <td><input type="password" inputmode="numeric" maxlength="8" data-c="pp" data-dni="${p.dni}" placeholder="${p.pin?'••••  (cambiar)':'asignar'}" style="width:120px"></td>
+ <td><button class="er" data-a="delp" data-dni="${p.dni}">Eliminar</button></td></tr>`).join('')}</table></div></div>`}
+function modal(){const{dni,d}=S.edit,p=S.staff[dni],cur=days(dni)[d];
+ return`<div class="mod" data-a="close"><div><h2>${esc(p.nombre)}</h2><p class="muted">Día ${d} de ${MN[ym()[1]-1]} (${['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][dw(d)]})</p>
+ <div class="opts">${codesFor(p,d).map(k=>`<button data-a="pick" data-k="${k}" style="background:${T(k).c};${cur===k?'outline:4px solid var(--tx)':''}">${esc(T(k).n)}<small>${T(k).h} horas</small></button>`).join('')}<button data-a="pick" data-k="" style="background:var(--mu)">Borrar este día</button></div>
+ <div class="row"><button data-a="close" style="width:100%">Cancelar</button></div></div></div>`}
+function login(){const l=S.lg;$('#hr').innerHTML='';$('#sub').textContent='';let h;
+ if(l.s==='reg')h=`<h2>Primera vez: complete sus datos</h2><p class="muted">DNI ${l.dni}</p><label>Apellidos y nombres</label><input id="rn" style="width:100%"><label>Servicio</label><select id="rs" style="width:100%">${l.sv.map(s=>`<option value="${s.id}">${esc(s.n)}</option>`).join('')}</select><label>Tipo de horario</label><select id="rt" style="width:100%"><option value="turnos">Turnos (mañana / tarde / guardia)</option><option value="adm">Administrativo (lunes a viernes)</option></select><div class="row"><button class="pr" data-a="reg">Guardar y entrar</button><button data-a="lgo">Volver</button></div>`;
+ else if(l.s==='pin')h=`<h2>Ingrese su clave</h2><p class="muted">DNI ${l.dni}</p><input id="pin" type="password" inputmode="numeric" class="big" placeholder="Clave"><div class="row"><button class="pr" style="flex:1" data-a="in2">Entrar</button><button data-a="lgo">Volver</button></div>`;
+ else if(l.s==='adm')h=`<h2>Administrador</h2><input id="pw" type="password" class="big" style="letter-spacing:0;font-size:20px" placeholder="Contraseña"><div class="row"><button class="pr" style="flex:1" data-a="inadm">Entrar</button><button data-a="lgo">Volver</button></div>`;
+ else h=`<h2>Ingrese con su DNI</h2><input id="dni" class="big" inputmode="numeric" maxlength="8" placeholder="DNI (8 números)"><div class="row"><button class="pr" style="width:100%;font-size:20px" data-a="in">Entrar</button></div><p class="muted">Si es su primera vez, el sistema le pedirá sus datos.</p><hr style="border:0;border-top:1px solid var(--bd);margin:16px 0"><button data-a="lga" style="width:100%">🔑 Entrar como Administrador</button>`;
+ return`<div class="card" style="max-width:480px;margin:30px auto">${h}</div>`}
+function render(){const R=$('#app');if(!S.ready)return;if(!S.me)return R.innerHTML=login();
+ const c=cg();$('#sub').textContent=(c==='admin'?'Administrador':svn(S.me.servicio)+' · '+(c==='jefa'?'Jefa de Personal':c==='jefe'?'Jefe de servicio':'Trabajador'));
+ $('#hr').innerHTML=`<span>${esc(S.me.nombre)}</span> <button data-a="out" style="margin-left:8px;padding:6px 12px">Salir</button>`;
+ const tabs=[];if(!adm())tabs.push(['mi','Mi rol']);if(jefe())tabs.push(['srv','Mi servicio']);if(full())tabs.push(['srv','Servicios'],['apr','Aprobación']);tabs.push(['pub','Rol aprobado']);if(adm())tabs.push(['cfg','Configuración'],['per','Personal y permisos']);
+ if(!tabs.some(t=>t[0]===S.view))S.view=tabs[0][0];
+ const ms=[];for(let i=-1;i<4;i++){const n=new Date();n.setDate(1);n.setMonth(n.getMonth()+i);ms.push(n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'))}
+ if(!ms.includes(S.mes))ms.push(S.mes);
+ R.innerHTML=`<nav>${tabs.map(([k,v])=>`<button class="${S.view===k?'on':''}" data-a="tab" data-k="${k}">${v}</button>`).join('')}<select data-c="mes">${ms.map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${MN[+m.slice(5)-1]} ${m.slice(0,4)}</option>`).join('')}</select></nav>`+{mi:vMi,srv:vSrv,apr:vApr,pub:vPub,cfg:vCfg,per:vPer}[S.view]()+(S.edit?modal():'')}
+function csv(){const n=nd(),r=[['Servicio','Apellidos y nombres',...Array.from({length:n},(_,i)=>(i+1)+' '+DL[dw(i+1)]),'Total horas']];
+ S.cfg.servicios.forEach(s=>act_staff(s.id).forEach(p=>r.push([s.n,p.nombre,...Array.from({length:n},(_,i)=>days(p.dni)[i+1]||''),tot(p.dni)])));
+ return'\ufeff'+r.map(x=>x.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n')}
+async function enter(j){try{localStorage.setItem('tk',j.token)}catch(e){}S.lg={s:'dni'};await load()}
+const saveCfg=()=>act('cfg',{cfg:S.cfg});
+const A={
+ lga(){S.lg={s:'adm'};render()},lgo(){S.lg={s:'dni'};render()},
+ async inadm(){try{await enter(await api('login',{admin:1,password:$('#pw').value}))}catch(e){alert(e.message)}},
+ async in(){const dni=($('#dni').value||'').trim();try{const j=await api('login',{dni});if(j.nuevo){S.lg={s:'reg',dni,sv:j.servicios}}else if(j.needPin){S.lg={s:'pin',dni}}else return enter(j);render()}catch(e){alert(e.message)}},
+ async in2(){try{await enter(await api('login',{dni:S.lg.dni,pin:$('#pin').value}))}catch(e){alert(e.message)}},
+ async reg(){try{await enter(await api('register',{dni:S.lg.dni,nombre:$('#rn').value,servicio:$('#rs').value,tipo:$('#rt').value}))}catch(e){alert(e.message)}},
+ out(){try{localStorage.removeItem('tk')}catch(e){}S.me=null;S.lg={s:'dni'};render()},
+ tab(t){S.view=t.k;render()},
+ cell(t){const p=S.staff[t.dni];if(!canEdit(p))return alert(S.pub?'El rol ya fue aprobado. Solo la Jefa de Personal puede cambiarlo.':'No puede modificar este rol');if(blocked(+t.d,p)&&!days(t.dni)[t.d])return;S.edit={dni:t.dni,d:+t.d};render()},
+ close(t,e){if(e.target===e.currentTarget){S.edit=null;render()}},
+ async pick(t){const{dni,d}=S.edit;S.edit=null;render();await act('setday',{dni,d,code:t.k})},
+ listo(){act('listo',{dni:S.me.dni,v:!S.rol[S.me.dni]?.listo})},
+ est(t){act('est',{sv:t.sv,e:t.e})},ver(t){S.sv=t.sv;S.view='srv';render()},
+ pub(t){if(t.v==='1'&&!confirm('¿Aprobar y enviar el rol de todos los trabajadores?'))return;act('pub',{v:t.v==='1'})},
+ csv(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv()],{type:'text/csv'}));a.download='rol_chincha_baja_'+S.mes+'.csv';a.click()},
+ print(){window.print()},
+ addsv(){const n=$('#nsv').value.trim();if(!n)return;S.cfg.servicios.push({id:n.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'')+Date.now()%1000,n});saveCfg()},
+ delsv(t){if(confirm('¿Quitar este servicio?')){S.cfg.servicios.splice(+t.i,1);saveCfg()}},
+ addp(){act('staffadd',{nombre:$('#an').value,dni:$('#ad').value,servicio:$('#as').value,tipo:$('#at').value,cargo:$('#ac').value,pin:$('#ap').value})},
+ delp(t){if(confirm('¿Eliminar a esta persona?'))act('staffdel',{dni:t.dni})}};
+document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(t)A[t.dataset.a]?.(t.dataset,e)});
+document.addEventListener('change',e=>{const t=e.target,c=t.dataset.c;if(!c)return;const v=t.value,k=t.dataset.k,dni=t.dataset.dni;
+ if(c==='mes'){S.mes=v;load();return}if(c==='sv'){S.sv=v;render();return}
+ if(c==='ps')return act('staffset',{dni,servicio:v});if(c==='pt')return act('staffset',{dni,tipo:v});if(c==='pc')return act('staffset',{dni,cargo:v});if(c==='pp'){if(v)act('staffset',{dni,pin:v});return}
+ if(c==='meta')S.cfg.meta=+v||150;if(c==='dom')S.cfg.domingo=t.checked;if(c==='tn')S.cfg.turnos[k].n=v;if(c==='th')S.cfg.turnos[k].h=+v||0;if(c==='sn')S.cfg.servicios[+t.dataset.i].n=v;saveCfg()});
+setInterval(()=>{if(S.me&&!S.edit&&!/INPUT|SELECT/.test(document.activeElement?.tagName))load()},20000);
+load();
+</script></body></html>
